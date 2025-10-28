@@ -9,9 +9,9 @@
 #   curl -fsSL https://your-domain.com/sa-create.sh | bash
 #
 # Environment variables:
-#   NAME                  Service account name (default: hypershield)
-#   NAMESPACE             Kubernetes namespace (default: hypershield)
-#   API_SERVER_PUBLIC_IP  (Optional) Public IP for API server URL override
+#   NAME             Service account name (default: hypershield)
+#   NAMESPACE        Kubernetes namespace (default: hypershield)
+#   API_SERVER:PORT  (Optional) API server address+port override
 #
 # Examples:
 #   # Install with defaults
@@ -23,8 +23,8 @@
 #   # Customize both name and namespace
 #   curl -fsSL https://your-domain.com/sa-create.sh | NAME=my-sa NAMESPACE=my-ns bash
 #
-#   # Use public IP for API server in the token
-#   curl -fsSL https://your-domain.com/sa-create.sh | API_SERVER_PUBLIC_IP=203.0.113.10 bash
+#   # Use a custom address+port combo for API server in the token
+#   curl -fsSL https://your-domain.com/sa-create.sh | API_SERVER=172.31.251.83:9001 bash
 
 read -r -d '' _SA_SECRET_TEMPLATE <<'EOF'
 apiVersion: rbac.authorization.k8s.io/v1
@@ -42,6 +42,30 @@ rules:
       - tetragonnetworkpoliciesnamespaced
       - tracingpolicies
       - tracingpoliciesnamespaced
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - isovalent.com
+    resources:
+      - smartswitchnetworkpolicies
     verbs:
       - get
       - list
@@ -103,6 +127,18 @@ echo "  Name: $NAME"
 echo "  Namespace: $NAMESPACE"
 echo ""
 
+# Check if namespace exists, create if it doesn't
+if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
+    echo "Namespace '$NAMESPACE' does not exist, creating it..."
+    if ! kubectl create namespace "$NAMESPACE"; then
+        echo ""
+        echo "✗ Failed to create namespace '$NAMESPACE'" >&2
+        exit 1
+    fi
+    echo "✓ Namespace '$NAMESPACE' created"
+    echo ""
+fi
+
 if ! eval "echo \"$_SA_SECRET_TEMPLATE\"" | kubectl apply -f -; then
     echo ""
     echo "✗ Failed to install Hypershield ServiceAccount" >&2
@@ -152,13 +188,7 @@ fi
 API_SERVER_INTERNAL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
 # Determine API server URL (use public IP if provided)
-if [ -n "${API_SERVER_PUBLIC_IP:-}" ]; then
-    API_SERVER="https://${API_SERVER_PUBLIC_IP}"
-    PORT=$(echo "$API_SERVER_INTERNAL" | sed -E 's/.*:([0-9]+)$/\1/')
-    if [ -n "$PORT" ]; then
-        API_SERVER="${API_SERVER}:${PORT}"
-    fi
-else
+if [ -z "${API_SERVER:-}" ]; then
     API_SERVER="$API_SERVER_INTERNAL"
 fi
 
