@@ -70,6 +70,19 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - isovalent.com
+    resources:
+      - smartswitches
+      - smartswitches/status
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
