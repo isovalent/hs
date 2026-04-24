@@ -66,6 +66,7 @@ rules:
       - isovalent.com
     resources:
       - smartswitchnetworkpolicies
+      - networkobjectgroups
     verbs:
       - get
       - list
